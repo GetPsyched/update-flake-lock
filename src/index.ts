@@ -2,6 +2,7 @@ import * as actionsCore from "@actions/core";
 import * as actionsExec from "@actions/exec";
 import * as actionsGithub from "@actions/github";
 import * as actionsIo from "@actions/io";
+import { readFileSync } from "fs";
 
 async function main() {
   let authorName;
@@ -44,6 +45,31 @@ async function main() {
   actionsCore.exportVariable("GIT_COMMITTER_NAME", committerName);
   actionsCore.exportVariable("GIT_COMMITTER_EMAIL", committerEmail);
 
+  const token = actionsCore.getInput("token");
+  const octokit = actionsGithub.getOctokit(token);
+
+  const repoDetails = await octokit.rest.repos.get({
+    ...actionsGithub.context.repo,
+  });
+  const baseBranch = actionsCore.getInput("base")
+    ? actionsCore.getInput("base")
+    : repoDetails.data.default_branch;
+  const baseBranchRef = await octokit.rest.git.getRef({
+    ...actionsGithub.context.repo,
+    ref: `heads/${baseBranch}`,
+  });
+  const headBranch = actionsCore.getInput("branch");
+  const branches = await octokit.rest.repos.listBranches({
+    ...actionsGithub.context.repo,
+  });
+  if (!branches.data.some((branch) => branch.name === headBranch)) {
+    await octokit.rest.git.createRef({
+      ...actionsGithub.context.repo,
+      ref: `refs/heads/${headBranch}`,
+      sha: baseBranchRef.data.object.sha,
+    });
+  }
+
   // Run update-flake-lock.sh
   await actionsExec.exec("./update-flake-lock.sh", [], {
     env: {
@@ -58,6 +84,48 @@ async function main() {
       PATH_TO_FLAKE_DIR: actionsCore.getInput("path-to-flake-dir"),
       TARGETS: actionsCore.getInput("inputs"),
     },
+  });
+
+  const blob = await octokit.rest.git.createBlob({
+    ...actionsGithub.context.repo,
+    content: Buffer.from(readFileSync("./flake.lock", "utf-8")).toString(
+      "base64",
+    ),
+    encoding: "base64",
+  });
+
+  const currentCommit = await octokit.rest.repos.getCommit({
+    ...actionsGithub.context.repo,
+    ref: `heads/${headBranch}`,
+  });
+
+  const tree = await octokit.rest.git.createTree({
+    ...actionsGithub.context.repo,
+    base_tree: currentCommit.data.commit.tree.sha,
+    tree: [
+      {
+        path: "flake.lock",
+        mode: "100644",
+        type: "blob",
+        sha: blob.data.sha,
+      },
+    ],
+  });
+
+  const newCommit = await octokit.rest.git.createCommit({
+    ...actionsGithub.context.repo,
+    author: { name: authorName, email: authorEmail },
+    committer: { name: committerName, email: committerEmail },
+    message: actionsCore.getInput("commit-msg"),
+    tree: tree.data.sha,
+    parents: [currentCommit.data.sha],
+  });
+
+  await octokit.rest.git.updateRef({
+    ...actionsGithub.context.repo,
+    ref: `heads/${headBranch}`,
+    sha: newCommit.data.sha,
+    force: true,
   });
 
   // Set additional env variables (GIT_COMMIT_MESSAGE)
@@ -82,17 +150,10 @@ async function main() {
   console.log("GIT_COMMIT_MESSAGE is:", commitMessage);
 
   // Create PR
-  const token = actionsCore.getInput("token");
-  const octokit = actionsGithub.getOctokit(token);
-
-  const repoDetails = await octokit.rest.repos.get({
-    ...actionsGithub.context.repo,
-  });
-  const baseBranch = actionsCore.getInput("base");
   await octokit.rest.pulls.create({
     ...actionsGithub.context.repo,
-    base: baseBranch ? baseBranch : repoDetails.data.default_branch,
-    head: actionsCore.getInput("branch"),
+    base: baseBranch,
+    head: headBranch,
 
     title: actionsCore.getInput("pr-title"),
     body: actionsCore.getInput("pr-body"),

@@ -21,3 +21,5 @@ if [[ -n "$TARGETS" ]]; then
 else
     $NIX_BINARY "${options[@]}" flake update --commit-lock-file --commit-lockfile-summary "$COMMIT_MSG"
 fi
+
+git log
