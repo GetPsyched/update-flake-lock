@@ -84,9 +84,14 @@ async function main() {
   // Create PR
   const token = actionsCore.getInput("token");
   const octokit = actionsGithub.getOctokit(token);
+
+  const repoDetails = await octokit.rest.repos.get({
+    ...actionsGithub.context.repo,
+  });
+  const baseBranch = actionsCore.getInput("base");
   await octokit.rest.pulls.create({
     ...actionsGithub.context.repo,
-    base: actionsCore.getInput("base"),
+    base: baseBranch ? baseBranch : repoDetails.data.default_branch,
     head: actionsCore.getInput("branch"),
 
     title: actionsCore.getInput("pr-title"),

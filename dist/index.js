@@ -32228,9 +32228,13 @@ async function main() {
   console.log("GIT_COMMIT_MESSAGE is:", commitMessage);
   const token = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("token");
   const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
+  const repoDetails = await octokit.rest.repos.get({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
+  });
+  const baseBranch = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base");
   await octokit.rest.pulls.create({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    base: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base"),
+    base: baseBranch ? baseBranch : repoDetails.data.default_branch,
     head: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("branch"),
     title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
     body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body")
