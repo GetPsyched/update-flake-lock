@@ -1,12 +1,12 @@
 {
-  description = "update-flake-lock";
+  description = "Development environment for the Update Flake Lock action for GitHub.";
 
-  inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.533189.tar.gz";
+  inputs = {
+    flake-schemas.url = "https://flakehub.com/f/DeterminateSystems/flake-schemas/*.tar.gz";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.0.tar.gz";
+  };
 
-  outputs =
-    { self
-    , nixpkgs
-    }:
+  outputs = { self, flake-schemas, nixpkgs }:
     let
       nameValuePair = name: value: { inherit name value; };
       genAttrs = names: f: builtins.listToAttrs (map (n: nameValuePair n (f n)) names);
@@ -19,12 +19,19 @@
         });
     in
     {
-      devShell = forAllSystems
-        ({ system, pkgs, ... }:
-          pkgs.stdenv.mkDerivation {
-            name = "update-flake-lock-devshell";
-            buildInputs = [ pkgs.shellcheck ];
-            src = self;
-          });
+      schemas = flake-schemas.schemas;
+
+      devShells = forAllSystems ({ system, pkgs, ... }: {
+        default = with pkgs; stdenv.mkDerivation {
+          name = "update-flake-lock-devshell";
+          buildInputs = [
+            shellcheck
+            nixpkgs-fmt
+            nodePackages_latest.pnpm
+            nodePackages_latest.typescript-language-server
+          ];
+          src = self;
+        };
+      });
     };
 }
