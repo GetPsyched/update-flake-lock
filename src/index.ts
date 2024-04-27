@@ -1,6 +1,7 @@
 import * as actionsCore from "@actions/core";
 import * as actionsExec from "@actions/exec";
 import * as actionsGithub from "@actions/github";
+import * as actionsIo from "@actions/io";
 
 async function main() {
   let authorName;
@@ -51,6 +52,8 @@ async function main() {
       GIT_AUTHOR_EMAIL: authorEmail,
       GIT_COMMITTER_NAME: committerName,
       GIT_COMMITTER_EMAIL: committerEmail,
+      // Explicitly specify Nix path since it's not automatically picked up.
+      NIX_BINARY: await actionsIo.which("nix", true),
       NIX_OPTIONS: actionsCore.getInput("nix-options"),
       PATH_TO_FLAKE_DIR: actionsCore.getInput("path-to-flake-dir"),
       TARGETS: actionsCore.getInput("inputs"),

@@ -32170,7 +32170,9 @@ var __webpack_exports__ = {};
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(9093);
 /* harmony import */ var _actions_exec__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7775);
 /* harmony import */ var _actions_github__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(5942);
+/* harmony import */ var _actions_io__WEBPACK_IMPORTED_MODULE_3__ = __nccwpck_require__(2826);
 // src/index.ts
+
 
 
 
@@ -32208,6 +32210,8 @@ async function main() {
       GIT_AUTHOR_EMAIL: authorEmail,
       GIT_COMMITTER_NAME: committerName,
       GIT_COMMITTER_EMAIL: committerEmail,
+      // Explicitly specify Nix path since it's not automatically picked up.
+      NIX_BINARY: await _actions_io__WEBPACK_IMPORTED_MODULE_3__.which("nix", true),
       NIX_OPTIONS: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("nix-options"),
       PATH_TO_FLAKE_DIR: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir"),
       TARGETS: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs")

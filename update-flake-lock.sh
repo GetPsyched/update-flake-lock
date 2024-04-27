@@ -17,7 +17,7 @@ if [[ -n "$TARGETS" ]]; then
     for input in $TARGETS; do
         inputs+=("--update-input" "$input")
     done
-    nix "${options[@]}" flake lock "${inputs[@]}" --commit-lock-file --commit-lockfile-summary "$COMMIT_MSG"
+    $NIX_BINARY "${options[@]}" flake lock "${inputs[@]}" --commit-lock-file --commit-lockfile-summary "$COMMIT_MSG"
 else
-    nix "${options[@]}" flake update --commit-lock-file --commit-lockfile-summary "$COMMIT_MSG"
+    $NIX_BINARY "${options[@]}" flake update --commit-lock-file --commit-lockfile-summary "$COMMIT_MSG"
 fi
