@@ -32292,7 +32292,7 @@ async function createPR(token, baseBranch, headBranch, meta) {
     console.log(
       `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`
     );
-    return;
+    return { number: existingPR.data[0].number, operation: "updated" };
   }
   const pullRequest = await octokit.rest.pulls.create({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
@@ -32326,6 +32326,7 @@ async function createPR(token, baseBranch, headBranch, meta) {
       assignees: meta.assignees
     });
   }
+  return { number: pullRequest.data.number, operation: "created" };
 }
 async function main() {
   const token = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("token");
@@ -32350,13 +32351,20 @@ async function main() {
 ${flakeChangelog}`,
     pathToFlakeDir
   );
-  await createPR(token, baseBranch, headBranch, {
-    title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
-    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
-    labels: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
-    reviewers: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-reviewers").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
-    assignees: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-assignees").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label)
-  });
+  const { number: prNumber, operation } = await createPR(
+    token,
+    baseBranch,
+    headBranch,
+    {
+      title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
+      body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
+      labels: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
+      reviewers: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-reviewers").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
+      assignees: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-assignees").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label)
+    }
+  );
+  _actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput("pull-request-number", prNumber);
+  _actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput("pull-request-operation", operation);
 }
 main();
 //# sourceMappingURL=index.js.map

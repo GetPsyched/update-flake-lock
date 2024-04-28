@@ -195,7 +195,7 @@ async function createPR(
     console.log(
       `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`,
     );
-    return;
+    return { number: existingPR.data[0].number, operation: "updated" };
   }
   const pullRequest = await octokit.rest.pulls.create({
     ...actionsGithub.context.repo,
@@ -234,6 +234,8 @@ async function createPR(
       assignees: meta.assignees,
     });
   }
+
+  return { number: pullRequest.data.number, operation: "created" };
 }
 
 async function main() {
@@ -265,28 +267,37 @@ async function main() {
     pathToFlakeDir,
   );
 
-  await createPR(token, baseBranch, headBranch, {
-    title: actionsCore.getInput("pr-title"),
-    body: actionsCore
-      .getInput("pr-body")
-      // FIXME: Figure out why GH isn't replacing env vars with their values
-      .replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
-    labels: actionsCore
-      .getInput("pr-labels")
-      .split(",")
-      .flatMap((label) => label.split("\n"))
-      .filter((label) => !!label),
-    reviewers: actionsCore
-      .getInput("pr-reviewers")
-      .split(",")
-      .flatMap((label) => label.split("\n"))
-      .filter((label) => !!label),
-    assignees: actionsCore
-      .getInput("pr-assignees")
-      .split(",")
-      .flatMap((label) => label.split("\n"))
-      .filter((label) => !!label),
-  });
+  const { number: prNumber, operation } = await createPR(
+    token,
+    baseBranch,
+    headBranch,
+    {
+      title: actionsCore.getInput("pr-title"),
+      body: actionsCore
+        .getInput("pr-body")
+        // FIXME: Figure out why GH isn't replacing env vars with their values
+        .replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
+      labels: actionsCore
+        .getInput("pr-labels")
+        .split(",")
+        .flatMap((label) => label.split("\n"))
+        .filter((label) => !!label),
+      reviewers: actionsCore
+        .getInput("pr-reviewers")
+        .split(",")
+        .flatMap((label) => label.split("\n"))
+        .filter((label) => !!label),
+      assignees: actionsCore
+        .getInput("pr-assignees")
+        .split(",")
+        .flatMap((label) => label.split("\n"))
+        .filter((label) => !!label),
+    },
+  );
+
+  actionsCore.setOutput("pull-request-number", prNumber);
+  // FIXME: When will a PR be closed?
+  actionsCore.setOutput("pull-request-operation", operation);
 }
 
 main();
