@@ -3,6 +3,37 @@ import * as actionsExec from "@actions/exec";
 import * as actionsGithub from "@actions/github";
 import { readFileSync } from "fs";
 
+async function getSigningInfo() {
+  if (actionsCore.getBooleanInput("sign-commits")) {
+    // Import bot's GPG key for signing commits
+    const gpgPrivateKey = actionsCore.getInput("gpg-private-key");
+    const gpgFingerprint = actionsCore.getInput("gpg-fingerprint");
+    const gpgPassphrase = actionsCore.getInput("gpg-passphrase");
+    const git_config_global = true;
+    const git_user_signingkey = true;
+    const git_commit_gpgsign = true;
+
+    // FIXME: Figure out how to do gpg stuff
+    const gpgOutputs = await actionsExec.getExecOutput("some command here");
+
+    return {
+      author: { name: "", email: "" },
+      committer: { name: "", email: "" },
+    };
+  } else {
+    return {
+      author: {
+        name: actionsCore.getInput("git-author-name"),
+        email: actionsCore.getInput("git-author-email"),
+      },
+      committer: {
+        name: actionsCore.getInput("git-committer-name"),
+        email: actionsCore.getInput("git-committer-email"),
+      },
+    };
+  }
+}
+
 async function createBranch(token: string, base: string, head: string) {
   const octokit = actionsGithub.getOctokit(token);
 
@@ -71,8 +102,6 @@ async function commit(
   token: string,
   headBranch: string,
   message: string,
-  author: { name: string; email: string },
-  committer: { name: string; email: string },
   pathToFlakeDir: string,
 ) {
   const octokit = actionsGithub.getOctokit(token);
@@ -110,8 +139,7 @@ async function commit(
 
   const newCommit = await octokit.rest.git.createCommit({
     ...actionsGithub.context.repo,
-    author: author,
-    committer: committer,
+    ...(await getSigningInfo()),
     message: message,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha],
@@ -209,41 +237,6 @@ async function createPR(
 }
 
 async function main() {
-  let authorName;
-  let authorEmail;
-  let committerName;
-  let committerEmail;
-
-  if (actionsCore.getBooleanInput("sign-commits")) {
-    // Import bot's GPG key for signing commits
-    const gpgPrivateKey = actionsCore.getInput("gpg-private-key");
-    const gpgFingerprint = actionsCore.getInput("gpg-fingerprint");
-    const gpgPassphrase = actionsCore.getInput("gpg-passphrase");
-    const git_config_global = true;
-    const git_user_signingkey = true;
-    const git_commit_gpgsign = true;
-
-    // Set environment variables (signed commits)
-    authorName = "";
-    authorEmail = "";
-    committerName = "";
-    committerEmail = "";
-    // TODO: GITHUB_ENV insertions
-    // echo "GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME" >> $GITHUB_ENV
-    // echo "GIT_AUTHOR_EMAIL=<$GIT_AUTHOR_EMAIL>" >> $GITHUB_ENV
-    // echo "GIT_COMMITTER_NAME=$GIT_COMMITTER_NAME" >> $GITHUB_ENV
-    // echo "GIT_COMMITTER_EMAIL=<$GIT_COMMITTER_EMAIL>" >> $GITHUB_ENV
-
-    // FIXME: Figure out how to do gpg stuff
-    const gpgOutputs = await actionsExec.getExecOutput("some command here");
-  } else {
-    // Set environment variables (unsigned commits)
-    authorName = actionsCore.getInput("git-author-name");
-    authorEmail = actionsCore.getInput("git-author-email");
-    committerName = actionsCore.getInput("git-committer-name");
-    committerEmail = actionsCore.getInput("git-committer-email");
-  }
-
   const token = actionsCore.getInput("token");
   const [baseBranch, headBranch] = await createBranch(
     token,
@@ -269,8 +262,6 @@ async function main() {
     token,
     headBranch,
     `${actionsCore.getInput("commit-msg")}\n\n${flakeChangelog}`,
-    { name: authorName, email: authorEmail },
-    { name: committerName, email: committerEmail },
     pathToFlakeDir,
   );
 

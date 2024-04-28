@@ -32176,6 +32176,32 @@ var __webpack_exports__ = {};
 
 
 
+async function getSigningInfo() {
+  if (_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput("sign-commits")) {
+    const gpgPrivateKey = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-private-key");
+    const gpgFingerprint = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-fingerprint");
+    const gpgPassphrase = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-passphrase");
+    const git_config_global = true;
+    const git_user_signingkey = true;
+    const git_commit_gpgsign = true;
+    const gpgOutputs = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput("some command here");
+    return {
+      author: { name: "", email: "" },
+      committer: { name: "", email: "" }
+    };
+  } else {
+    return {
+      author: {
+        name: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-author-name"),
+        email: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-author-email")
+      },
+      committer: {
+        name: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-name"),
+        email: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-email")
+      }
+    };
+  }
+}
 async function createBranch(token, base, head) {
   const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
   const repoDetails = await octokit.rest.repos.get({
@@ -32213,7 +32239,7 @@ async function updateFlakeLock(options) {
   const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
   return ["Flake lock file updates:", "", ...flakeUpdates].join("\n").trim();
 }
-async function commit(token, headBranch, message, author, committer, pathToFlakeDir) {
+async function commit(token, headBranch, message, pathToFlakeDir) {
   const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
   const blob = await octokit.rest.git.createBlob({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
@@ -32244,8 +32270,7 @@ async function commit(token, headBranch, message, author, committer, pathToFlake
   }
   const newCommit = await octokit.rest.git.createCommit({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    author,
-    committer,
+    ...await getSigningInfo(),
     message,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha]
@@ -32303,28 +32328,6 @@ async function createPR(token, baseBranch, headBranch, meta) {
   }
 }
 async function main() {
-  let authorName;
-  let authorEmail;
-  let committerName;
-  let committerEmail;
-  if (_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput("sign-commits")) {
-    const gpgPrivateKey = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-private-key");
-    const gpgFingerprint = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-fingerprint");
-    const gpgPassphrase = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("gpg-passphrase");
-    const git_config_global = true;
-    const git_user_signingkey = true;
-    const git_commit_gpgsign = true;
-    authorName = "";
-    authorEmail = "";
-    committerName = "";
-    committerEmail = "";
-    const gpgOutputs = await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput("some command here");
-  } else {
-    authorName = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-author-name");
-    authorEmail = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-author-email");
-    committerName = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-name");
-    committerEmail = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-email");
-  }
   const token = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("token");
   const [baseBranch, headBranch] = await createBranch(
     token,
@@ -32345,8 +32348,6 @@ async function main() {
     `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
 
 ${flakeChangelog}`,
-    { name: authorName, email: authorEmail },
-    { name: committerName, email: committerEmail },
     pathToFlakeDir
   );
   await createPR(token, baseBranch, headBranch, {
