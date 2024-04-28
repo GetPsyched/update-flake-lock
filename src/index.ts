@@ -3,6 +3,33 @@ import * as actionsExec from "@actions/exec";
 import * as actionsGithub from "@actions/github";
 import { readFileSync } from "fs";
 
+async function createBranch(token: string, base: string, head: string) {
+  const octokit = actionsGithub.getOctokit(token);
+
+  const repoDetails = await octokit.rest.repos.get({
+    ...actionsGithub.context.repo,
+  });
+  const baseBranch = base ? base : repoDetails.data.default_branch;
+
+  const branches = await octokit.rest.repos.listBranches({
+    ...actionsGithub.context.repo,
+  });
+  if (!branches.data.some((branch) => branch.name === head)) {
+    const baseBranchRef = await octokit.rest.git.getRef({
+      ...actionsGithub.context.repo,
+      ref: `heads/${baseBranch}`,
+    });
+
+    await octokit.rest.git.createRef({
+      ...actionsGithub.context.repo,
+      ref: `refs/heads/${head}`,
+      sha: baseBranchRef.data.object.sha,
+    });
+  }
+
+  return [baseBranch, head];
+}
+
 async function updateFlakeLock(options?: {
   inputs?: string[];
   nixOptions?: string[];
@@ -40,52 +67,21 @@ async function updateFlakeLock(options?: {
   return ["Flake lock file updates:", "", ...flakeUpdates].join("\n").trim();
 }
 
-async function createNewBranch(token: string, base: string, head: string) {
-  const octokit = actionsGithub.getOctokit(token);
-
-  const repoDetails = await octokit.rest.repos.get({
-    ...actionsGithub.context.repo,
-  });
-  const baseBranch = base ? base : repoDetails.data.default_branch;
-
-  const branches = await octokit.rest.repos.listBranches({
-    ...actionsGithub.context.repo,
-  });
-  if (!branches.data.some((branch) => branch.name === head)) {
-    const baseBranchRef = await octokit.rest.git.getRef({
-      ...actionsGithub.context.repo,
-      ref: `heads/${baseBranch}`,
-    });
-
-    await octokit.rest.git.createRef({
-      ...actionsGithub.context.repo,
-      ref: `refs/heads/${head}`,
-      sha: baseBranchRef.data.object.sha,
-    });
-  }
-
-  return [baseBranch, head];
-}
-
 async function commit(
   token: string,
   headBranch: string,
+  message: string,
   author: { name: string; email: string },
   committer: { name: string; email: string },
+  pathToFlakeDir: string,
 ) {
   const octokit = actionsGithub.getOctokit(token);
 
-  const inputs = actionsCore.getInput("inputs").split(" ");
-  const pathToFlakeDir = actionsCore.getInput("path-to-flake-dir");
-  const flakeChangelog = await updateFlakeLock({
-    inputs: inputs,
-    workingDirectory: pathToFlakeDir,
-  });
-  if (!flakeChangelog) return "";
-
   const blob = await octokit.rest.git.createBlob({
     ...actionsGithub.context.repo,
-    content: readFileSync(`${pathToFlakeDir}flake.lock`, "utf-8"),
+    content: Buffer.from(
+      readFileSync(`${pathToFlakeDir}flake.lock`, "utf-8"),
+    ).toString("base64"),
     encoding: "base64",
   });
 
@@ -116,7 +112,7 @@ async function commit(
     ...actionsGithub.context.repo,
     author: author,
     committer: committer,
-    message: `${actionsCore.getInput("commit-msg")}\n\n${flakeChangelog}`,
+    message: message,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha],
   });
@@ -148,8 +144,6 @@ async function commit(
   // // echo "$COMMIT_MESSAGE" >> $GITHUB_ENV
   // // echo "$DELIMITER" >> $GITHUB_ENV
   // console.log("GIT_COMMIT_MESSAGE is:", commitMessage);
-
-  return flakeChangelog;
 }
 
 async function createPR(
@@ -251,21 +245,34 @@ async function main() {
   }
 
   const token = actionsCore.getInput("token");
-  const [baseBranch, headBranch] = await createNewBranch(
+  const [baseBranch, headBranch] = await createBranch(
     token,
     actionsCore.getInput("base"),
     actionsCore.getInput("branch"),
   );
-  const flakeChangelog = await commit(
+
+  const pathToFlakeDir = actionsCore.getInput("path-to-flake-dir");
+  const flakeChangelog = await updateFlakeLock({
+    inputs: actionsCore
+      .getInput("inputs")
+      .split(" ")
+      .filter((input) => !!input),
+    nixOptions: actionsCore
+      .getInput("nix-options")
+      .split(" ")
+      .filter((input) => !!input),
+    workingDirectory: pathToFlakeDir,
+  });
+  if (!flakeChangelog) return;
+
+  await commit(
     token,
     headBranch,
+    `${actionsCore.getInput("commit-msg")}\n\n${flakeChangelog}`,
     { name: authorName, email: authorEmail },
     { name: committerName, email: committerEmail },
+    pathToFlakeDir,
   );
-  if (!flakeChangelog) {
-    console.log("flake.lock is up to date. Exiting.");
-    return;
-  }
 
   await createPR(token, baseBranch, headBranch, {
     title: actionsCore.getInput("pr-title"),

@@ -32176,22 +32176,7 @@ var __webpack_exports__ = {};
 
 
 
-async function updateFlakeLock(options) {
-  const flakeUpdatesWithWarning = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
-    "nix flake update",
-    [
-      "--no-warn-dirty"
-      // FIXME: `--update-input` is not a recognised flag
-      //  ...inputs.map((input) => `--update-input ${input}`)
-    ],
-    { cwd: options?.workingDirectory }
-  )).stderr;
-  if (!flakeUpdatesWithWarning)
-    return "";
-  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
-  return ["Flake lock file updates:", "", ...flakeUpdates].join("\n").trim();
-}
-async function createNewBranch(token, base, head) {
+async function createBranch(token, base, head) {
   const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
   const repoDetails = await octokit.rest.repos.get({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
@@ -32213,19 +32198,28 @@ async function createNewBranch(token, base, head) {
   }
   return [baseBranch, head];
 }
-async function commit(token, headBranch, author, committer) {
-  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
-  const inputs = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs").split(" ");
-  const pathToFlakeDir = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir");
-  const flakeChangelog = await updateFlakeLock({
-    inputs,
-    workingDirectory: pathToFlakeDir
-  });
-  if (!flakeChangelog)
+async function updateFlakeLock(options) {
+  const flakeUpdatesWithWarning = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
+    "nix flake update",
+    [
+      "--no-warn-dirty"
+      // FIXME: `--update-input` is not a recognised flag
+      //  ...inputs.map((input) => `--update-input ${input}`)
+    ],
+    { cwd: options?.workingDirectory }
+  )).stderr;
+  if (!flakeUpdatesWithWarning)
     return "";
+  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
+  return ["Flake lock file updates:", "", ...flakeUpdates].join("\n").trim();
+}
+async function commit(token, headBranch, message, author, committer, pathToFlakeDir) {
+  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
   const blob = await octokit.rest.git.createBlob({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    content: (0,fs__WEBPACK_IMPORTED_MODULE_3__.readFileSync)(`${pathToFlakeDir}flake.lock`, "utf-8"),
+    content: Buffer.from(
+      (0,fs__WEBPACK_IMPORTED_MODULE_3__.readFileSync)(`${pathToFlakeDir}flake.lock`, "utf-8")
+    ).toString("base64"),
     encoding: "base64"
   });
   const currentCommit = await octokit.rest.repos.getCommit({
@@ -32252,9 +32246,7 @@ async function commit(token, headBranch, author, committer) {
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
     author,
     committer,
-    message: `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
-
-${flakeChangelog}`,
+    message,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha]
   });
@@ -32264,7 +32256,6 @@ ${flakeChangelog}`,
     sha: newCommit.data.sha,
     force: true
   });
-  return flakeChangelog;
 }
 async function createPR(token, baseBranch, headBranch, meta) {
   const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
@@ -32335,21 +32326,29 @@ async function main() {
     committerEmail = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-email");
   }
   const token = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("token");
-  const [baseBranch, headBranch] = await createNewBranch(
+  const [baseBranch, headBranch] = await createBranch(
     token,
     _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base"),
     _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("branch")
   );
-  const flakeChangelog = await commit(
+  const pathToFlakeDir = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir");
+  const flakeChangelog = await updateFlakeLock({
+    inputs: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs").split(" ").filter((input) => !!input),
+    nixOptions: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("nix-options").split(" ").filter((input) => !!input),
+    workingDirectory: pathToFlakeDir
+  });
+  if (!flakeChangelog)
+    return;
+  await commit(
     token,
     headBranch,
+    `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
+
+${flakeChangelog}`,
     { name: authorName, email: authorEmail },
-    { name: committerName, email: committerEmail }
+    { name: committerName, email: committerEmail },
+    pathToFlakeDir
   );
-  if (!flakeChangelog) {
-    console.log("flake.lock is up to date. Exiting.");
-    return;
-  }
   await createPR(token, baseBranch, headBranch, {
     title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
     body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
