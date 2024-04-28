@@ -1,7 +1,6 @@
 import * as actionsCore from "@actions/core";
 import * as actionsExec from "@actions/exec";
 import * as actionsGithub from "@actions/github";
-import * as actionsIo from "@actions/io";
 import { readFileSync } from "fs";
 
 async function main() {
@@ -71,26 +70,42 @@ async function main() {
   }
 
   // Run update-flake-lock.sh
-  await actionsExec.exec("./update-flake-lock.sh", [], {
-    env: {
-      COMMIT_MSG: actionsCore.getInput("commit-msg"),
-      GIT_AUTHOR_NAME: authorName,
-      GIT_AUTHOR_EMAIL: authorEmail,
-      GIT_COMMITTER_NAME: committerName,
-      GIT_COMMITTER_EMAIL: committerEmail,
-      // Explicitly specify Nix path since it's not automatically picked up.
-      NIX_BINARY: await actionsIo.which("nix", true),
-      NIX_OPTIONS: actionsCore.getInput("nix-options"),
-      PATH_TO_FLAKE_DIR: actionsCore.getInput("path-to-flake-dir"),
-      TARGETS: actionsCore.getInput("inputs"),
-    },
-  });
+  // await actionsExec.exec("./update-flake-lock.sh", [], {
+  //   env: {
+  //     COMMIT_MSG: actionsCore.getInput("commit-msg"),
+  //     GIT_AUTHOR_NAME: authorName,
+  //     GIT_AUTHOR_EMAIL: authorEmail,
+  //     GIT_COMMITTER_NAME: committerName,
+  //     GIT_COMMITTER_EMAIL: committerEmail,
+  //     // Explicitly specify Nix path since it's not automatically picked up.
+  //     NIX_BINARY: await actionsIo.which("nix", true),
+  //     NIX_OPTIONS: actionsCore.getInput("nix-options"),
+  //     PATH_TO_FLAKE_DIR: actionsCore.getInput("path-to-flake-dir"),
+  //     TARGETS: actionsCore.getInput("inputs"),
+  //   },
+  // });
+  const inputs = actionsCore.getInput("inputs").split(" ");
+  const flakeDir = actionsCore.getInput("path-to-flake-dir");
+  const flakeUpdatesWithWarning = (
+    await actionsExec.getExecOutput(
+      "nix flake update",
+      [
+        "--no-warn-dirty",
+        // FIXME: `--update-input` is not a recognised flag
+        //  ...inputs.map((input) => `--update-input ${input}`)
+      ],
+      { cwd: flakeDir },
+    )
+  ).stderr;
+  if (!flakeUpdatesWithWarning) return;
+  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
+  const flakeUpdatesString = ["Flake lock file updates:", "", flakeUpdates]
+    .join("\n")
+    .trim();
 
   const blob = await octokit.rest.git.createBlob({
     ...actionsGithub.context.repo,
-    content: Buffer.from(readFileSync("./flake.lock", "utf-8")).toString(
-      "base64",
-    ),
+    content: readFileSync(`${flakeDir}flake.lock`, "utf-8"),
     encoding: "base64",
   });
 
@@ -104,7 +119,7 @@ async function main() {
     base_tree: currentCommit.data.commit.tree.sha,
     tree: [
       {
-        path: "flake.lock",
+        path: `${flakeDir}flake.lock`,
         mode: "100644",
         type: "blob",
         sha: blob.data.sha,
@@ -116,7 +131,7 @@ async function main() {
     ...actionsGithub.context.repo,
     author: { name: authorName, email: authorEmail },
     committer: { name: committerName, email: committerEmail },
-    message: actionsCore.getInput("commit-msg"),
+    message: `${actionsCore.getInput("commit-msg")}\n\n${flakeUpdatesString}`,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha],
   });
@@ -156,7 +171,10 @@ async function main() {
     head: headBranch,
 
     title: actionsCore.getInput("pr-title"),
-    body: actionsCore.getInput("pr-body"),
+    body: actionsCore
+      .getInput("pr-body")
+      // FIXME: Figure out why GH isn't replacing env vars with their values
+      .replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeUpdatesString),
 
     // FIXME: Figure out how to add the following missing attributes:
     //   - delete-branch

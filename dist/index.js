@@ -32170,10 +32170,8 @@ var __webpack_exports__ = {};
 /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(9093);
 /* harmony import */ var _actions_exec__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(7775);
 /* harmony import */ var _actions_github__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(5942);
-/* harmony import */ var _actions_io__WEBPACK_IMPORTED_MODULE_3__ = __nccwpck_require__(2826);
-/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_4__ = __nccwpck_require__(7147);
+/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_3__ = __nccwpck_require__(7147);
 // src/index.ts
-
 
 
 
@@ -32226,25 +32224,24 @@ async function main() {
       sha: baseBranchRef.data.object.sha
     });
   }
-  await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.exec("./update-flake-lock.sh", [], {
-    env: {
-      COMMIT_MSG: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg"),
-      GIT_AUTHOR_NAME: authorName,
-      GIT_AUTHOR_EMAIL: authorEmail,
-      GIT_COMMITTER_NAME: committerName,
-      GIT_COMMITTER_EMAIL: committerEmail,
-      // Explicitly specify Nix path since it's not automatically picked up.
-      NIX_BINARY: await _actions_io__WEBPACK_IMPORTED_MODULE_3__.which("nix", true),
-      NIX_OPTIONS: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("nix-options"),
-      PATH_TO_FLAKE_DIR: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir"),
-      TARGETS: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs")
-    }
-  });
+  const inputs = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs").split(" ");
+  const flakeDir = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir");
+  const flakeUpdatesWithWarning = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
+    "nix flake update",
+    [
+      "--no-warn-dirty"
+      // FIXME: `--update-input` is not a recognised flag
+      //  ...inputs.map((input) => `--update-input ${input}`)
+    ],
+    { cwd: flakeDir }
+  )).stderr;
+  if (!flakeUpdatesWithWarning)
+    return;
+  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
+  const flakeUpdatesString = ["Flake lock file updates:", "", flakeUpdates].join("\n").trim();
   const blob = await octokit.rest.git.createBlob({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    content: Buffer.from((0,fs__WEBPACK_IMPORTED_MODULE_4__.readFileSync)("./flake.lock", "utf-8")).toString(
-      "base64"
-    ),
+    content: (0,fs__WEBPACK_IMPORTED_MODULE_3__.readFileSync)(`${flakeDir}flake.lock`, "utf-8"),
     encoding: "base64"
   });
   const currentCommit = await octokit.rest.repos.getCommit({
@@ -32256,7 +32253,7 @@ async function main() {
     base_tree: currentCommit.data.commit.tree.sha,
     tree: [
       {
-        path: "flake.lock",
+        path: `${flakeDir}flake.lock`,
         mode: "100644",
         type: "blob",
         sha: blob.data.sha
@@ -32267,7 +32264,9 @@ async function main() {
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
     author: { name: authorName, email: authorEmail },
     committer: { name: committerName, email: committerEmail },
-    message: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg"),
+    message: `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
+
+${flakeUpdatesString}`,
     tree: tree.data.sha,
     parents: [currentCommit.data.sha]
   });
@@ -32291,7 +32290,7 @@ async function main() {
     base: baseBranch,
     head: headBranch,
     title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
-    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body")
+    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeUpdatesString)
     // FIXME: Figure out how to add the following missing attributes:
     //   - delete-branch
     //   - committer
