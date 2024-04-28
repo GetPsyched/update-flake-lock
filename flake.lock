@@ -1,40 +1,1 @@
-{
-  "nodes": {
-    "flake-schemas": {
-      "locked": {
-        "lastModified": 1697467827,
-        "narHash": "sha256-j8SR19V1SRysyJwpOBF4TLuAvAjF5t+gMiboN4gYQDU=",
-        "rev": "764932025c817d4e500a8d2a4d8c565563923d29",
-        "revCount": 29,
-        "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/flake-schemas/0.1.2/018b3da8-4cc3-7fbb-8ff7-1588413c53e2/source.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://flakehub.com/f/DeterminateSystems/flake-schemas/%2A.tar.gz"
-      }
-    },
-    "nixpkgs": {
-      "locked": {
-        "lastModified": 1714076141,
-        "narHash": "sha256-Drmja/f5MRHZCskS6mvzFqxEaZMeciScCTFxWVLqWEY=",
-        "rev": "7bb2ccd8cdc44c91edba16c48d2c8f331fb3d856",
-        "revCount": 616726,
-        "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.616726%2Brev-7bb2ccd8cdc44c91edba16c48d2c8f331fb3d856/018f1b7a-3024-744d-92f4-1398df513980/source.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://flakehub.com/f/NixOS/nixpkgs/0.1.0.tar.gz"
-      }
-    },
-    "root": {
-      "inputs": {
-        "flake-schemas": "flake-schemas",
-        "nixpkgs": "nixpkgs"
-      }
-    }
-  },
-  "root": "root",
-  "version": 7
-}
+‡^±ùZ‘ë…éš²Z‘çejËL¡ØŸ‰çuëŞøë¿6îv««!²¶ç¨üI}WT‘ÊÌ‰Â“„Ë¸ÀŒ^mú"nƒx„R·¯ï®=ßm6åÏ5íŞçMñİšáßç®yëvİİ½­ëÂ¢éíÛÛr¥ëZ­¶¥–êå†Ûi³ÿÚ¦'åjG¡¹·(›÷ÿ¦)çyßÃz×«š)Úµä²²×¦³÷åjG¬r¦jÏô×oô×Æ÷u¯8qÍû}¶ü}şõçÏ8×w9İí¿²‹«qëZ®è®("©mÊ—­j¶Ú–[«–m¦Ïÿ~V¤z›r‰¿ğŞµêæŠv­y,¬µé¬ıùZ‘ë…éš³ı€µªàÎx±¦H,–‡$yÙZ²Ó(v'âyİ{×;ë^5ªÇjÈl…­¹è:æ¯ßäÄGd+$K©¯ÌZ±¦LyÈ’p$ÅÅeK©a­ëûm½œqßuÎ8sİ^u¶µéÎ<wg<}õ}½İó«zğ¨º{z×®öêÜ©zÖ«m©eº¹a¶Úlÿö©‰ùZ‘ènmÊ&ıÿéŠyŞwóbÄä¿,i’?Ó^µë½ºØŞ¿¶ÛÙÇñÇ\ã‡=Õç[k^œãÇvsÇ÷ßWÛİß9ëı5ñı[í­ôÛøáßvw÷Ç_ç]ıóOì¢êÜzÖ«ƒ:+Š§j[r¥ëZ­¶¥–êå†Ûi³ÿß•©†æÜ¢oßüØ±9/ç‹d‚Ïô×KZ®ë¢‹b›­±ùZ‘ë…éš±ùZ‘ë…éš²x±¦H,,i’+¢‹k¢‹oz»"¢~
