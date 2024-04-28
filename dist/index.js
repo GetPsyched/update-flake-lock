@@ -32176,6 +32176,96 @@ var __webpack_exports__ = {};
 
 
 
+async function updateFlakeLock(options) {
+  const flakeUpdatesWithWarning = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
+    "nix flake update",
+    [
+      "--no-warn-dirty"
+      // FIXME: `--update-input` is not a recognised flag
+      //  ...inputs.map((input) => `--update-input ${input}`)
+    ],
+    { cwd: options?.workingDirectory }
+  )).stderr;
+  if (!flakeUpdatesWithWarning)
+    return "";
+  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
+  return ["Flake lock file updates:", "", ...flakeUpdates].join("\n").trim();
+}
+async function createNewBranch(token, base, head) {
+  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
+  const repoDetails = await octokit.rest.repos.get({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
+  });
+  const baseBranch = base ? base : repoDetails.data.default_branch;
+  const branches = await octokit.rest.repos.listBranches({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
+  });
+  if (!branches.data.some((branch) => branch.name === head)) {
+    const baseBranchRef = await octokit.rest.git.getRef({
+      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+      ref: `heads/${baseBranch}`
+    });
+    await octokit.rest.git.createRef({
+      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+      ref: `refs/heads/${head}`,
+      sha: baseBranchRef.data.object.sha
+    });
+  }
+  return [baseBranch, head];
+}
+async function commit(token, headBranch, author, committer) {
+  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
+  const inputs = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs").split(" ");
+  const pathToFlakeDir = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir");
+  const flakeChangelog = await updateFlakeLock({
+    inputs,
+    workingDirectory: pathToFlakeDir
+  });
+  if (!flakeChangelog)
+    return "";
+  const blob = await octokit.rest.git.createBlob({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    content: (0,fs__WEBPACK_IMPORTED_MODULE_3__.readFileSync)(`${pathToFlakeDir}flake.lock`, "utf-8"),
+    encoding: "base64"
+  });
+  const currentCommit = await octokit.rest.repos.getCommit({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    ref: `heads/${headBranch}`
+  });
+  const tree = await octokit.rest.git.createTree({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    base_tree: currentCommit.data.commit.tree.sha,
+    tree: [
+      {
+        path: `${pathToFlakeDir}flake.lock`,
+        mode: "100644",
+        type: "blob",
+        sha: blob.data.sha
+      }
+    ]
+  });
+  if (tree.data.sha === currentCommit.data.commit.tree.sha) {
+    console.log("Working tree is clean, skipping commit.");
+    return "";
+  }
+  const newCommit = await octokit.rest.git.createCommit({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    author,
+    committer,
+    message: `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
+
+${flakeChangelog}`,
+    tree: tree.data.sha,
+    parents: [currentCommit.data.sha]
+  });
+  await octokit.rest.git.updateRef({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    ref: `heads/${headBranch}`,
+    sha: newCommit.data.sha,
+    force: true
+  });
+  return flakeChangelog;
+}
 async function main() {
   let authorName;
   let authorEmail;
@@ -32199,98 +32289,39 @@ async function main() {
     committerName = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-name");
     committerEmail = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("git-committer-email");
   }
-  _actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable("GIT_AUTHOR_NAME", authorName);
-  _actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable("GIT_AUTHOR_EMAIL", authorEmail);
-  _actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable("GIT_COMMITTER_NAME", committerName);
-  _actions_core__WEBPACK_IMPORTED_MODULE_0__.exportVariable("GIT_COMMITTER_EMAIL", committerEmail);
   const token = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("token");
-  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
-  const repoDetails = await octokit.rest.repos.get({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
-  });
-  const baseBranch = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base") ? _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base") : repoDetails.data.default_branch;
-  const baseBranchRef = await octokit.rest.git.getRef({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    ref: `heads/${baseBranch}`
-  });
-  const headBranch = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("branch");
-  const branches = await octokit.rest.repos.listBranches({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo
-  });
-  if (!branches.data.some((branch) => branch.name === headBranch)) {
-    await octokit.rest.git.createRef({
-      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-      ref: `refs/heads/${headBranch}`,
-      sha: baseBranchRef.data.object.sha
-    });
-  }
-  const inputs = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("inputs").split(" ");
-  const flakeDir = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("path-to-flake-dir");
-  const flakeUpdatesWithWarning = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
-    "nix flake update",
-    [
-      "--no-warn-dirty"
-      // FIXME: `--update-input` is not a recognised flag
-      //  ...inputs.map((input) => `--update-input ${input}`)
-    ],
-    { cwd: flakeDir }
-  )).stderr;
-  if (!flakeUpdatesWithWarning)
+  const [baseBranch, headBranch] = await createNewBranch(
+    token,
+    _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("base"),
+    _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("branch")
+  );
+  const flakeChangelog = await commit(
+    token,
+    headBranch,
+    { name: authorName, email: authorEmail },
+    { name: committerName, email: committerEmail }
+  );
+  if (!flakeChangelog) {
+    console.log("flake.lock is up to date. Exiting.");
     return;
-  const [warning, ...flakeUpdates] = flakeUpdatesWithWarning.split("\n");
-  const flakeUpdatesString = ["Flake lock file updates:", "", flakeUpdates].join("\n").trim();
-  const blob = await octokit.rest.git.createBlob({
+  }
+  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
+  const existingPR = await octokit.rest.pulls.list({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    content: (0,fs__WEBPACK_IMPORTED_MODULE_3__.readFileSync)(`${flakeDir}flake.lock`, "utf-8"),
-    encoding: "base64"
+    head: headBranch
   });
-  const currentCommit = await octokit.rest.repos.getCommit({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    ref: `heads/${headBranch}`
-  });
-  const tree = await octokit.rest.git.createTree({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    base_tree: currentCommit.data.commit.tree.sha,
-    tree: [
-      {
-        path: `${flakeDir}flake.lock`,
-        mode: "100644",
-        type: "blob",
-        sha: blob.data.sha
-      }
-    ]
-  });
-  const newCommit = await octokit.rest.git.createCommit({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    author: { name: authorName, email: authorEmail },
-    committer: { name: committerName, email: committerEmail },
-    message: `${_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("commit-msg")}
-
-${flakeUpdatesString}`,
-    tree: tree.data.sha,
-    parents: [currentCommit.data.sha]
-  });
-  await octokit.rest.git.updateRef({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    ref: `heads/${headBranch}`,
-    sha: newCommit.data.sha,
-    force: true
-  });
-  const delimiter = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput("base64", [], {
-    input: Buffer.from(
-      (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput(
-        "dd if=/dev/urandom bs=15 count=1 status=none"
-      )).stdout
-    )
-  })).stdout;
-  const commitMessage = (await _actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput("git log --format=%b -n 1")).stdout;
-  console.log("GIT_COMMIT_MESSAGE is:", commitMessage);
+  if (existingPR.data.length !== 0) {
+    console.log(
+      `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`
+    );
+    return;
+  }
   await octokit.rest.pulls.create({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
     base: baseBranch,
     head: headBranch,
     title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
-    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeUpdatesString)
+    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog)
     // FIXME: Figure out how to add the following missing attributes:
     //   - delete-branch
     //   - committer
