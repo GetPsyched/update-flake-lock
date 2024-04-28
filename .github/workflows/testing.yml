@@ -16,3 +16,7 @@ jobs:
           pr-labels: |
             dependencies
             automated
+          pr-reviewers: |
+            GetPsyched
+          pr-assignees: |
+            getpsyched

@@ -152,6 +152,68 @@ async function commit(
   return flakeChangelog;
 }
 
+async function createPR(
+  token: string,
+  baseBranch: string,
+  headBranch: string,
+  meta: {
+    title: string;
+    body: string;
+    labels?: string[];
+    reviewers?: string[];
+    assignees?: string[];
+  },
+) {
+  const octokit = actionsGithub.getOctokit(token);
+  const existingPR = await octokit.rest.pulls.list({
+    ...actionsGithub.context.repo,
+    head: headBranch,
+  });
+  if (existingPR.data.length !== 0) {
+    console.log(
+      `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`,
+    );
+    return;
+  }
+  const pullRequest = await octokit.rest.pulls.create({
+    ...actionsGithub.context.repo,
+    base: baseBranch,
+    head: headBranch,
+
+    title: meta.title,
+    body: meta.body,
+
+    // FIXME: Figure out how to add the following missing attributes:
+    //   - delete-branch
+    //   - committer
+    //   - author
+  });
+
+  if (meta.labels) {
+    await octokit.rest.issues.addLabels({
+      ...actionsGithub.context.repo,
+      issue_number: pullRequest.data.number,
+      labels: meta.labels,
+    });
+  }
+
+  if (meta.reviewers) {
+    await octokit.rest.pulls.requestReviewers({
+      ...actionsGithub.context.repo,
+      pull_number: pullRequest.data.number,
+      reviewers: meta.reviewers,
+    });
+  }
+
+  if (meta.assignees) {
+    await octokit.rest.issues.addAssignees({
+      ...actionsGithub.context.repo,
+      issue_number: pullRequest.data.number,
+      assignees: meta.assignees,
+    });
+  }
+}
+
 async function main() {
   let authorName;
   let authorEmail;
@@ -205,48 +267,27 @@ async function main() {
     return;
   }
 
-  const octokit = actionsGithub.getOctokit(token);
-  const existingPR = await octokit.rest.pulls.list({
-    ...actionsGithub.context.repo,
-    head: headBranch,
-  });
-  if (existingPR.data.length !== 0) {
-    console.log(
-      `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`,
-    );
-    return;
-  }
-  const pullRequest = await octokit.rest.pulls.create({
-    ...actionsGithub.context.repo,
-    base: baseBranch,
-    head: headBranch,
-
+  await createPR(token, baseBranch, headBranch, {
     title: actionsCore.getInput("pr-title"),
     body: actionsCore
       .getInput("pr-body")
       // FIXME: Figure out why GH isn't replacing env vars with their values
       .replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
-
-    // FIXME: Figure out how to add the following missing attributes:
-    //   - delete-branch
-    //   - committer
-    //   - author
-    //   - assignees
-    //   - reviewers
-  });
-
-  const prLabels = actionsCore
-    .getInput("pr-labels")
-    .split(",")
-    .flatMap((label) => label.split("\n"))
-    .filter((label) => !!label);
-  console.log("raw", actionsCore.getInput("pr-labels"));
-  console.log("formatted", prLabels);
-
-  await octokit.rest.issues.addLabels({
-    ...actionsGithub.context.repo,
-    issue_number: pullRequest.data.number,
-    labels: prLabels,
+    labels: actionsCore
+      .getInput("pr-labels")
+      .split(",")
+      .flatMap((label) => label.split("\n"))
+      .filter((label) => !!label),
+    reviewers: actionsCore
+      .getInput("pr-reviewers")
+      .split(",")
+      .flatMap((label) => label.split("\n"))
+      .filter((label) => !!label),
+    assignees: actionsCore
+      .getInput("pr-assignees")
+      .split(",")
+      .flatMap((label) => label.split("\n"))
+      .filter((label) => !!label),
   });
 }
 

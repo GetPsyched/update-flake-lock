@@ -32266,6 +32266,51 @@ ${flakeChangelog}`,
   });
   return flakeChangelog;
 }
+async function createPR(token, baseBranch, headBranch, meta) {
+  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
+  const existingPR = await octokit.rest.pulls.list({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    head: headBranch
+  });
+  if (existingPR.data.length !== 0) {
+    console.log(
+      `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`
+    );
+    return;
+  }
+  const pullRequest = await octokit.rest.pulls.create({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    base: baseBranch,
+    head: headBranch,
+    title: meta.title,
+    body: meta.body
+    // FIXME: Figure out how to add the following missing attributes:
+    //   - delete-branch
+    //   - committer
+    //   - author
+  });
+  if (meta.labels) {
+    await octokit.rest.issues.addLabels({
+      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+      issue_number: pullRequest.data.number,
+      labels: meta.labels
+    });
+  }
+  if (meta.reviewers) {
+    await octokit.rest.pulls.requestReviewers({
+      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+      pull_number: pullRequest.data.number,
+      reviewers: meta.reviewers
+    });
+  }
+  if (meta.assignees) {
+    await octokit.rest.issues.addAssignees({
+      ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+      issue_number: pullRequest.data.number,
+      assignees: meta.assignees
+    });
+  }
+}
 async function main() {
   let authorName;
   let authorEmail;
@@ -32305,37 +32350,12 @@ async function main() {
     console.log("flake.lock is up to date. Exiting.");
     return;
   }
-  const octokit = _actions_github__WEBPACK_IMPORTED_MODULE_2__.getOctokit(token);
-  const existingPR = await octokit.rest.pulls.list({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    head: headBranch
-  });
-  if (existingPR.data.length !== 0) {
-    console.log(
-      `Skipping PR creation, it already exists at ${existingPR.data[0].html_url}`
-    );
-    return;
-  }
-  const pullRequest = await octokit.rest.pulls.create({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    base: baseBranch,
-    head: headBranch,
+  await createPR(token, baseBranch, headBranch, {
     title: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-title"),
-    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog)
-    // FIXME: Figure out how to add the following missing attributes:
-    //   - delete-branch
-    //   - committer
-    //   - author
-    //   - assignees
-    //   - reviewers
-  });
-  const prLabels = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label);
-  console.log("raw", _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels"));
-  console.log("formatted", prLabels);
-  await octokit.rest.issues.addLabels({
-    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
-    issue_number: pullRequest.data.number,
-    labels: prLabels
+    body: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-body").replace("{{ env.GIT_COMMIT_MESSAGE }}", flakeChangelog),
+    labels: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
+    reviewers: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-reviewers").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label),
+    assignees: _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-assignees").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label)
   });
 }
 main();
