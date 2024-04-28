@@ -1,25 +1,1 @@
-{
-  "nodes": {
-    "nixpkgs": {
-      "locked": {
-        "lastModified": 1696604326,
-        "narHash": "sha256-YXUNI0kLEcI5g8lqGMb0nh67fY9f2YoJsILafh6zlMo=",
-        "rev": "87828a0e03d1418e848d3dd3f3014a632e4a4f64",
-        "revCount": 533189,
-        "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.533189%2Brev-87828a0e03d1418e848d3dd3f3014a632e4a4f64/018b0dc8-e84f-7c59-b5d6-16849c3b2074/source.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://flakehub.com/f/NixOS/nixpkgs/0.1.533189.tar.gz"
-      }
-    },
-    "root": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      }
-    }
-  },
-  "root": "root",
-  "version": 7
-}
+‡^±ùZ‘ë…éš²Z‘çejËL¡ØŸ‰çuëŞøë¿6îv««!²¶ç¨üI}WT‘ÊÌ‰Â“„Ë¸ÀŒ^mú"nƒx„R·¯ï®=ßm6åÏ5íŞçMñİšáßç®yëvİİ½­ëÂ¢éíÛÛr¥ëZ­¶¥–êå†Ûi³ÿÚ¦'åjG¡¹·(›÷ÿ¦)çyßÃz×«š)Úµä²²×¦³÷åjG¬r¦jÏô×oô×Æ÷u¯8qÍû}¶ü}şõçÏ8×w9İí¿²‹«qëZ®è®("©mÊ—­j¶Ú–[«–m¦Ïÿ~V¤z›r‰¿ğŞµêæŠv­y,¬µé¬ıùZ‘ë…éš³ı€µªàÎx±¦H,–‡$yÙZ²Ó(v'âyİ{×;ë^5ªÇjÈl…­¹è:æ¯ßäÄGd+$K©¯ÌZ±¦LyÈ’p$ÅÅeK©a­ëûm½œqßuÎ8sİ^u¶µéÎ<wg<}õ}½İó«zğ¨º{z×®öêÜ©zÖ«m©eº¹a¶Úlÿö©‰ùZ‘ènmÊ&ıÿéŠyŞwóbÄä¿,i’?Ó^µë½ºØŞ¿¶ÛÙÇñÇ\ã‡=Õç[k^œãÇvsÇ÷ßWÛİß9ëı5ñı[í­ôÛøáßvw÷Ç_ç]ıóOì¢êÜzÖ«ƒ:+Š§j[r¥ëZ­¶¥–êå†Ûi³ÿß•©†æÜ¢oßüØ±9/ç‹d‚Ïô×KZ®ë¢‹b›­±ùZ‘ë…éš±ùZ‘ë…éš²x±¦H,,i’+¢‹k¢‹oz»"¢~
