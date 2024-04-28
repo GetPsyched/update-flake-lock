@@ -32316,7 +32316,7 @@ async function main() {
     );
     return;
   }
-  await octokit.rest.pulls.create({
+  const pullRequest = await octokit.rest.pulls.create({
     ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
     base: baseBranch,
     head: headBranch,
@@ -32327,8 +32327,15 @@ async function main() {
     //   - committer
     //   - author
     //   - assignees
-    //   - labels
     //   - reviewers
+  });
+  const prLabels = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels").split(",").flatMap((label) => label.split("\n")).filter((label) => !!label);
+  console.log("raw", _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput("pr-labels"));
+  console.log("formatted", prLabels);
+  await octokit.rest.issues.addLabels({
+    ..._actions_github__WEBPACK_IMPORTED_MODULE_2__.context.repo,
+    issue_number: pullRequest.data.number,
+    labels: prLabels
   });
 }
 main();

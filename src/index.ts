@@ -5,6 +5,7 @@ import { readFileSync } from "fs";
 
 async function updateFlakeLock(options?: {
   inputs?: string[];
+  nixOptions?: string[];
   workingDirectory?: string;
 }) {
   // Run update-flake-lock.sh
@@ -215,7 +216,7 @@ async function main() {
     );
     return;
   }
-  await octokit.rest.pulls.create({
+  const pullRequest = await octokit.rest.pulls.create({
     ...actionsGithub.context.repo,
     base: baseBranch,
     head: headBranch,
@@ -231,8 +232,21 @@ async function main() {
     //   - committer
     //   - author
     //   - assignees
-    //   - labels
     //   - reviewers
+  });
+
+  const prLabels = actionsCore
+    .getInput("pr-labels")
+    .split(",")
+    .flatMap((label) => label.split("\n"))
+    .filter((label) => !!label);
+  console.log("raw", actionsCore.getInput("pr-labels"));
+  console.log("formatted", prLabels);
+
+  await octokit.rest.issues.addLabels({
+    ...actionsGithub.context.repo,
+    issue_number: pullRequest.data.number,
+    labels: prLabels,
   });
 }
 
